@@ -1,36 +1,19 @@
 use genome::Genome;
-use rand::{rngs, Rng};
+use rand::Rng;
 
 mod genome;
 
 fn main() {
-    let mut population = generate_population(10);
+    let mut population = generate_population(100);
     for generation in 0..100 {
         let fitness_values = evaluate_fitness_of_population(&population);
-        print!("Generation {}: ", generation + 1);
-        println!(
-            "{}",
-            fitness_values.iter().sum::<i32>() / population.len() as i32
-        );
-        // print_population(&population);
-        // println!("\tFitness:");
-        // print_fitness_values(&fitness_values);
-        // println!("\tPairings:");
-        let mut new_population = Vec::with_capacity(population.len());
-        for index in 0..population.len() {
-            let genome_one_index = select_genome(&fitness_values);
-            let genome_two_index = select_genome(&fitness_values);
-            let new_genome = population[genome_one_index].cross(&population[genome_two_index]);
-            // println!(
-            //     "\t\t{}) {} x {} = {:?}",
-            //     index + 1,
-            //     genome_one_index,
-            //     genome_two_index,
-            //     new_genome
-            // );
-            new_population.push(new_genome);
-        }
-        population = new_population;
+        println!("Generation {}:\n", generation + 1);
+        print_population(&population);
+        print_fitness_values(&fitness_values);
+        print_average_fitness(&fitness_values);
+        let pairings = generate_pairings(&population);
+        print_pairings(&pairings);
+        population = next_generation(&population, pairings);
     }
     print_population(&population)
 }
@@ -47,7 +30,31 @@ fn generate_population(size: usize) -> Vec<genome::Genome> {
     population
 }
 
-fn evaluate_fitness_of_population(population: &Vec<genome::Genome>) -> Vec<i32> {
+fn generate_pairings(population: &Vec<Genome>) -> Vec<(usize, usize)> {
+    let fitness_values = evaluate_fitness_of_population(population);
+    (0..population.len())
+        .map(|_| {
+            let genome_one_index = select_genome(&fitness_values, None);
+            let genome_two_index = select_genome(&fitness_values, Some(genome_one_index));
+            (genome_one_index, genome_two_index)
+        })
+        .collect()
+}
+
+fn next_generation(
+    population: &Vec<genome::Genome>,
+    pairings: Vec<(usize, usize)>,
+) -> Vec<genome::Genome> {
+    pairings
+        .iter()
+        .map(|(genome_one_index, genome_two_index)| {
+            let new_genome = population[*genome_one_index].cross(&population[*genome_two_index]);
+            new_genome
+        })
+        .collect()
+}
+
+fn evaluate_fitness_of_population(population: &Vec<genome::Genome>) -> Vec<usize> {
     let mut fitness_values = Vec::with_capacity(population.len());
     for genome in population {
         let fitness = evaluate_fitness(genome);
@@ -56,11 +63,21 @@ fn evaluate_fitness_of_population(population: &Vec<genome::Genome>) -> Vec<i32> 
     fitness_values
 }
 
-fn evaluate_fitness(Genome { p, i, d }: &genome::Genome) -> i32 {
-    (1000.0 * 1.0 / (p + i + d)).round() as i32
+fn evaluate_fitness(Genome { p, i, d }: &genome::Genome) -> usize {
+    (1000.0 * 1.0 / (p + i + d)).round() as usize
 }
 
-fn select_genome(fitness_values: &Vec<i32>) -> usize {
+fn select_genome(fitness_values: &Vec<usize>, ignore: Option<usize>) -> usize {
+    let mut index = selection(fitness_values);
+    if let Some(ignore) = ignore {
+        while index == ignore {
+            index = selection(fitness_values);
+        }
+    }
+    index
+}
+
+fn selection(fitness_values: &Vec<usize>) -> usize {
     let mut rng = rand::thread_rng();
     let sum_of_fitness_values = fitness_values.iter().sum();
     let roll = rng.gen_range(1..=sum_of_fitness_values);
@@ -86,9 +103,31 @@ fn print_population(population: &Vec<genome::Genome>) {
     println!();
 }
 
-fn print_fitness_values(fitness_values: &Vec<i32>) {
+fn print_fitness_values(fitness_values: &Vec<usize>) {
+    println!("\tPopulation Fitness:\n");
+    let sum_of_fitness_values = fitness_values.iter().sum::<usize>();
     for (index, fitness) in fitness_values.iter().enumerate() {
-        println!("\t\t{}) Fitness: {}", index + 1, fitness);
+        let percentage = (fitness * 100) / sum_of_fitness_values;
+        println!("\t\t{}) Fitness: {} ({}%)", index + 1, fitness, percentage);
+    }
+    println!();
+}
+
+fn print_average_fitness(fitness_values: &Vec<usize>) {
+    let sum_of_fitness_values = fitness_values.iter().sum::<usize>();
+    let average_fitness = sum_of_fitness_values / fitness_values.len();
+    println!("\tAverage Fitness: {}\n", average_fitness);
+}
+
+fn print_pairings(pairings: &Vec<(usize, usize)>) {
+    println!("\tPairings:\n");
+    for (index, (genome_one_index, genome_two_index)) in pairings.iter().enumerate() {
+        println!(
+            "\t\t{}) {} x {}",
+            index + 1,
+            genome_one_index,
+            genome_two_index
+        );
     }
     println!();
 }
